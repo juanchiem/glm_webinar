@@ -1,0 +1,10 @@
+---
+title: "GLM para analisis de datos de fitopatologia"
+author: Juan Edwards y Agustin Alesso
+output: html_document
+date: '2022-06-02'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
