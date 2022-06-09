@@ -1,25 +1,14 @@
 ---
 title: "Generalized linear models"
 author: "Kasper Welbers & Wouter van Atteveldt"
-date: "January 2020"
-output:
-  html_document:
-    toc: yes
-  pdf_document:
-    toc: yes
-  word_document:
-    toc: yes
-editor_options:
-  chunk_output_type: console
 ---
 
 
 ```{r, echo=F, message=F, warning=F}
 knitr::opts_chunk$set(warning=FALSE, message=FALSE, fig.path = "img/")
-https://www.youtube.com/watch?v=DDP62EUMRFs
-
 ```
 
+# https://www.youtube.com/watch?v=DDP62EUMRFs
 # Generalized linear models (GLM)
 
 > In statistics, the generalized linear model (GLM) is a flexible generalization of ordinary linear regression that allows for response variables that have error distribution models other than a normal distribution. The GLM generalizes linear regression by allowing the linear model to be related to the response variable via a link function and by allowing the magnitude of the variance of each measurement to be a function of its predicted value. [Wikipedia](https://en.wikipedia.org/wiki/Generalized_linear_model)
@@ -35,11 +24,20 @@ You do not need to understand the data generation code to follow this tutorial, 
 [^1]: By GLM we strictly refer to General**ized** linear models, and not General Linear Models. Yes, there's a difference. Don't blame us, we didn't name this stuff.
 [^2]: there are similar packages that you might be familiar with, such as `texreg`, `stargazer` and 'apaTables`) 
 
-```{r, eval=F}
-install.packages('sjPlot')
-```
 ```{r}
+library(tidyverse)
+# install.packages('sjPlot')
 library(sjPlot)
+# install.packages('performance')
+library(performance)
+# install.packages('equatiomatic')
+library(equatiomatic)
+```
+
+```{r}
+glm(family = binomial, link=logit)
+binomial()
+poisson()
 ```
 
 
@@ -68,10 +66,39 @@ x = rnorm(200, 5, 4)        ## sample x from a normal distribution
 mu = 3 + 2*x                ## linear prediction
 y = rnorm(200, mu, 3)       ## generate y from prediction with a normal error distribution
 
-## fit linear model and plot
-m = lm(y~x)
-plot_model(m, type='pred', show.data=T, ci.lvl = NA)
+dat_lm <- tibble(x,y)
+
+dat_lm %>% 
+  ggplot() + 
+  aes(x=y) + 
+  geom_histogram()
+
+dat_lm %>% 
+  ggplot() + 
+  aes(x,y) +
+  geom_point(alpha=.5)
 ```
+
+
+```{r fig.align='center', fig.height=3, fig.width=5}
+## fit linear model and plot
+mod_lm <- lm(y~x, data=dat_lm)
+plot_model(mod_lm, type='pred', show.data=T, ci.lvl = NA)
+```
+
+
+```{r , fig.align='center', fig.height=3, fig.width=5}
+check_normality(mod_lm) %>% plot
+```
+
+```{r , fig.align='center', fig.height=3, fig.width=5}
+check_heteroscedasticity(mod_lm) %>% plot
+```
+
+```{r}
+extract_eq(mod_lm)
+```
+
 
 This is perfect data for an ordinary linear regression analysis.
 There is a linear relation and the residuals are normally distributed around the regression line with a constant variance. 
@@ -81,19 +108,14 @@ There is a linear relation and the residuals are normally distributed around the
 Now let's compare this to a case where the dependent variable is binary. First we generate the data.
 
 ```{r}
-## generate data
-set.seed=1
-x = rnorm(200, 5, 4)              ## sample x from a normal distribution
-mu = -1 + 0.4*x                   ## linear predictor
-prob = 1 / (1 + exp(-mu))         ## transform linear predictor with inverse of "logit" link
-y = rbinom(200, 1, prob = prob)   ## sample y from probabilities with binomial error distribution
+binomial_dat <- rio::import("https://raw.githubusercontent.com/juanchiem/agro_data/master/binomial.csv")
 ```
 
 Then we fit the linear model, and make a scatterplot with the regression line.
 
-```{r, glm_lm_on_binary, fig.align='center', fig.height=3, fig.width=5}
+```{r, fig.align='center', fig.height=3, fig.width=5}
 ## fit linear model and plot
-m_lm = lm(y ~ x)
+m_lm = lm(y ~ x, binomial_dat)
 plot_model(m_lm, type='pred', show.data=T, ci.lvl=NA)
 ```
 
@@ -109,7 +131,7 @@ If we would check our model diagnostics, we would see that the residuals tend to
 We will not discuss these diagnostics here, but you can run the code below yourself if you want to explore this yourself.
 
 ```{r, eval=F}
-plot(m, which = 1)
+plot(m_lm, which = 1)
 plot(m, which = 2)
 influence.measures(m)
 ```
@@ -133,7 +155,7 @@ To specify the error distribution and link function, we use the `family` argumen
 For logistic regression, we only need to pass the `binomial` function to `family`, which by default uses the `logit` link. Here we write it in full for sake of completeness.
 
 ```{r}
-m_glm = glm(y ~ x, family = binomial(link = 'logit'))
+m_glm = glm(y ~ x, family = binomial(link = 'logit'), data=binomial_dat)
 ```
 
 We can again use the same `plot_model` function to inspect the fit. 

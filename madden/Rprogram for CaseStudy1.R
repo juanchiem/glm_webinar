@@ -21,13 +21,23 @@ library(gee)
 
 
 ## set working directory and read in table of data from txt file
-M<-read.table("phomopsisp.txt")
+phom <- read.table("madden/phomopsisp2.txt")
 
 ## name the columns with data, mostly agreeing with SAS code
-colnames(M)<- c("treat", "block", "Y", "n")
+colnames(phom)<- c("trt", "bk", "y", "n")
+
+phom %>% 
+  arrange(trt) %>% 
+  rio::export("madden/phomopsisp.csv")
 
 ## print table to check that one has the right data
-M
+phom %>% 
+  ggplot() + 
+  aes(x=factor(trt), y = y/n) + 
+  geom_boxplot(alpha=.5, width = .2) + 
+  geom_point(alpha=.7) + 
+  geom_text(aes(label=bk), hjust=-1)+
+  labs(x="Tratamientos", y="Incidencia (proporción)")
 
 ## identify block and treat as FACTORS (class variables) for analysis
 M$block <- factor(M$block)
@@ -56,9 +66,9 @@ emmeans(model1r, pairwise~treat, adjust="none")  # get means, differences, and S
 ## In output for glmer, the square-root of random effect variances 
 ## (standard deviations) are displayed. Square these values to see estimated variances.
 
-resp <- with(M, cbind(Y, n-Y)) 
+inc <- with(M, cbind(Y, n-Y)) 
 
-model9 <- glm(resp ~ treat + block, family="binomial", data=M)
+model9 <- glm(inc ~ treat + block, family="binomial", data=M)
 library(hnp)
 hnp(model9)
 
@@ -69,7 +79,7 @@ model9  # print model-fit results for GLMM
 Anova(model9,type="III")  # do type 3 testing of treatment
 emmeans(model9, pairwise~treat, adjust="none")  # means and differences (all logiyts)
 
-model9_2 <- glmer(Y/n ~ treat + (1|block), 
+model9_2 <- glmer(resp ~ treat + (1|block), 
                  family="binomial", 
                  weights = n,
                  data=M)

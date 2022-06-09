@@ -1,0 +1,104 @@
+---
+title: "GLM Anova"
+author: "Juan Edwards"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Paquetes & data
+
+```{r}
+pacman::p_load(
+  # data import and explor 
+  tidyverse, 
+  rio, 
+  skimr,
+  # modeling
+  lme4, 
+  performance,
+  ggResidpanel,
+  car, 
+  effects, 
+  emmeans) 
+```
+
+Datos de rendimiento (rendimiento)
+
+```{r}
+yield_dat <- agridat::beaven.barley  
+head(yield_dat)
+
+yield_dat %>% # head
+  ggplot()+ 
+  aes(x=gen, y=yield) + 
+  geom_boxplot(alpha=.5, width = .2) + 
+  geom_point(alpha=.7) + 
+  labs(x="Genotipos de cebada", y="Rendimiento (g)")
+```
+
+```{r}
+mod_lm <- lm(inc ~ trt + bk, data=phom_dat)
+
+check_distribution(mod_lm)
+plot(check_distribution(mod_lm))
+
+em <- emmeans(mod_lm, "trt")
+knitr::kable(em) 
+```
+
+Importamos los datos de incidencia
+
+```{r}
+phom_raw <- import("https://raw.githubusercontent.com/juanchiem/agro_data/master/phomopsisp.csv")
+```
+
+> ***Efecto de tratamientos de fungicidas sobre tizon foliar por Phomopsis en frutilla (Nita, Madden & Ellis)*** \
+> -- Patogeno: *Phomopsis obscurans* \
+> - Diseño en bloques completos aleatorizados (RCBD) \
+> -- Cuatro bloques (bk, j = 1, ..., 4) \
+> -- Ocho tratamientos (trt, i = 1, ..., 8) aleatorizados dentro de cada bloque \
+> - Variable respuesta (Y): incidencia de foliolos \
+> -- Numero de foliolos enfermos de un total n
+>
+> Madden, L. V., W. W. Turechek, and M. Nita. "Evaluation of generalized linear mixed models for analyzing disease incidence data obtained in designed experiments." *Plant Disease* 86.3 (2002): 316-325.
+
+# Visualización
+
+```{r}
+phom_dat <- phom_raw %>% 
+  mutate_at(vars(trt, bk), as.factor) %>% 
+  mutate(inc=y/n)
+```
+
+```{r}
+phom_dat %>% 
+  group_by(trt) %>% 
+  skim(inc)
+```
+
+```{r}
+phom_dat %>% 
+  ggplot() + 
+  aes(x=trt, y = inc) + 
+  geom_boxplot(alpha=.5, width = .2) + 
+  geom_point(alpha=.7) + 
+  geom_text(aes(label=bk), hjust=-1)+
+  labs(x="Tratamientos", y="Incidencia (proporción)")
+```
+
+• Los errores estándar estimados (SE) son todos incorrectos (por definición), deben ser funciones de la media para datos binomiales [deben ser proporcionales a p(1-p)]
+
+• Los SE incorrectos darán pruebas incorrectas de significación para los efectos del tratamiento y conducirán a conclusiones incorrectas
+
+```{r}
+mod_1 <- glmer(cbind(y, n-y) ~ trt + (1|bk), 
+               family="binomial", 
+               # weights = n,
+               data=phom_dat)
+check_distribution(mod_1)
+plot(check_distribution(mod_1))
+
+hnp(mod_1)
+```
