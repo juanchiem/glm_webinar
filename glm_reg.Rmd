@@ -6,21 +6,23 @@ date: '2022-06-09'
 
 # Setup 
 
+Cargamos paquetes de utilidad para esta sesión y configuramos la estetica global de los graficos. 
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 pacman::p_load(tidyverse, 
                sjPlot, 
                lme4, 
                emmeans, 
-               multcomp, 
-               gmodels, 
-               epiDisplay)
+               multcomp)
+theme_set(theme_bw())
 ```
 
-# Demos
+# Demo
 
 ## Dist. Normal
 
+Todos conocemos 
 ```{r}
 set.seed(1)
 
@@ -42,7 +44,7 @@ y=rnorm(n=100,    # sample size
 plot(x,y)
 ```
 
-Modelo lineal
+## Rev. Modelo lineal
 
 ```{r}
 mod1 <- lm(y~x)
@@ -58,7 +60,7 @@ summary(mod1.1)
 
 ## Dist. Binomial
 
-Como tiende a la normal cuando aumento n
+Diferencias entre tamaño de muestra y numero de trials
 
 ```{r}
 bin_1 <- rbinom(
@@ -66,22 +68,168 @@ bin_1 <- rbinom(
     size=100, # number of trials
     p=0.5     # probability of success
     )
-hist(bin_1)
-head(bin_1)
+bin_1
+hist(bin_1); rug(bin_1, col="red")
+
 bin_2 <- rbinom(
     n=10,     # number of observations
     size=1,   # number of trials
     p=0.5     # probability of success
     )
 bin_2
-hist(bin_2)
+hist(bin_2); rug(bin_2, col="red")
+
 ```
+
+# Datos simulados
+
+Imaginemos que tomamos todos los alumnos de una clase n=24, y luego de un examen les pedimos que nos digan cuantas horas dedicaron a estudiar la prueba. Asi podemos agruparlos de a 4 entre 1 a 6 horas en la ultima semana. 
+El examen se aprueba con al menos nota 7, por lo que obtendremos una linea de corte para determinar los aprobados (nota>=7) y desaprobados (nota<7).
+
+```{r}
+horas <- c(1, 1, 1, 1, 
+           2, 2, 2, 2,
+           3, 3, 3, 3, 
+           4, 4, 4, 4, 
+           5, 5, 5, 5, 
+           6, 6, 6, 6 
+           )
+
+# variable discreta  
+nota  <- c(3, 5, 4, 7, 
+           6, 5, 7, 3, 
+           8, 6, 8, 5, 
+           9, 5, 10, 6, 
+           9, 7, 6, 9, 
+           9, 10, 10, 9 
+           )
+# generamos una variable binomial
+
+df <- data.frame(horas, nota) %>% 
+  mutate(aprobo =ifelse(nota>=7,1,0))
+```
+
+Visualicemos las notas obtenidas en funcion de las horas dedicadas a estudiar la materia
+
+```{r}
+df %>% 
+  ggplot() + 
+  aes(x=horas, y=nota) + 
+  stat_smooth()+
+  geom_point()
+```
+
+En nuestro caso nos interesaria evaluar y modelar la probabilidad de aprobar (nota>=7) segun la cantidad de horas dedicadas a estudiar el examen.
+
+Esto lo podemos realizar de tres maneras con glm! 
+
+Directamente con la variable binomial: aprobó=1 o desaprobó=0
+
+Con `r df` que contiene una observacion por fila
+
+```{r}
+p1 <- df %>% 
+  ggplot() + 
+  aes(x=horas, y=aprobo) + 
+  geom_count(alpha=.5) +
+  geom_smooth(method = "glm", se = F, fullrange=FALSE, size=0.6,
+              method.args = list(family = "binomial")) +
+  scale_x_continuous(labels=as.character(horas),breaks=horas)
+```
+
+```{r}
+m1 <- glm(aprobo ~ horas,
+          family = binomial(link = 'logit'), 
+          data=df)
+```
+
+Con `r df_sum` que resume la cantidad de exitos totales por cada n de cada nota.
+
+```{r}
+df_sum <- df %>% 
+    group_by(horas) %>% 
+    summarise(
+        n = sum(!is.na(aprobo)), 
+        aprobados = sum(aprobo))
+df_sum
+```
+
+```{r}
+p2 <- df_sum %>% 
+  ggplot() + 
+  aes(x=horas, y=aprobados/n) + 
+  stat_summary(fun=mean, col="red")+
+  geom_smooth(method = "glm", se =F, fullrange=FALSE, size=0.6,
+              method.args = list(family = "binomial")) +
+  scale_x_continuous(labels=as.character(horas),breaks=horas)+
+    ylim(0,1)
+    
+
+# df_sum %>% 
+#   ggplot() + 
+#   aes(x=horas, y=aprobo) + 
+#   stat_summary(fun=mean, col="red")+
+#   geom_smooth(method = "glm", se = T, fullrange=FALSE, size=0.6,
+#               method.args = list(family = "binomial")) +
+#   scale_x_continuous(labels=as.character(horas),breaks=horas)
+
+```
+
+
+```{r}
+m2 <- glm(cbind(aprobados, n-aprobados) ~ horas,  
+          family = binomial(link = 'logit'),  
+          data=df_sum)
+```
+
+O bien con las proporciones dentro de cada hora de estudio (aprobados/total)
+
+```{r}
+df_sum_prop <- df_sum %>% 
+    group_by(horas) %>% 
+    summarise(n=first(n), 
+              prop_aprob = aprobados/n)
+df_sum_prop
+```
+
+```{r}
+p3 <- df_sum_prop %>% 
+    ggplot() + 
+    aes(x=horas, y=prop_aprob) + 
+    geom_point() +
+    geom_smooth(method = "glm", se = F, fullrange=FALSE, size=0.6,
+                method.args = list(family = "binomial")) +
+    scale_x_continuous(labels=as.character(horas),breaks=horas)+
+    ylim(0,1)
+```
+
+```{r}
+m3 <- glm(prop_aprob ~ horas,  
+          family = binomial(link = 'logit'), 
+          weights = n,
+          data=df_sum_prop)
+```
+
+```{r}
+library(patchwork)
+p1 + p2 + p3 
+```
+
+```{r}
+tab_model(m1,m2, m3)
+```
+
+```{r}
+plot_model(m1, type='pred', show.data=T, terms='horas')
+```
+
+
 
 ```{r}
 # generate data
 # set.seed(1)
-# x = rnorm(100, 5, 4)              ## sample x from a normal distribution
-# mu = -1 + 0.4*x                   ## linear predictor
+# x = rnorm(100, 12, 4)             ## sample x from a normal distribution
+# mu = 1 + 0.5*x                   ## linear predictor
 # prob = 1 / (1 + exp(-mu))         ## transform linear predictor with inverse of "logit" link
 # y = rbinom(100, 1, prob = prob)   ## sample y from probabilities with binomial error distribution
 # hist(y)
@@ -115,6 +263,10 @@ binomial()
 poisson()
 ```
 
+Ultima aclaracion! 
+vimos como 
+
+
 # Data 
 
 ```{r}
@@ -122,19 +274,17 @@ poisson()
 # raw <- rio::import(maracuya, header=TRUE) %>% tibble
 raw <- rio::import("david/maracuya_roug.txt", header = TRUE) %>% tibble
 
-
 dat <- raw %>%  
   # dplyr::select(-inc) %>% 
   # rio::export(file = "david/maracuya_roug.txt")  
   mutate_at(vars(trt, bk), as.factor) %>% 
-  mutate(inc=dis_plants/n_plants)  # %>% 
+  mutate(inc_prop=dis_plants/n_plants)  # %>% 
 
 dat %>%
-  ggplot() +
-  aes(x=days, y=dis_plants, col=trt, shape=bk)+
-  geom_point()+
-  geom_line(aes(group=interaction(bk,trt))) +
-  scale_x_continuous(breaks=scales::pretty_breaks())
+    ggplot() +
+    aes(x=days, y=inc_prop, col=trt, shape=bk)+
+    geom_point()+
+    geom_line(aes(group=interaction(bk,trt))) 
 ```
 
 Filtramos el dataset completo para subsets de menos evaluaciones
@@ -178,7 +328,7 @@ dat1 %>%
 
 mod1 <- glmer(
   inc ~ trt + (1|bk),
-  weights=n_plants,
+  weights=n_plants, # observations per trial
   family="binomial", 
   data=dat1) 
 
