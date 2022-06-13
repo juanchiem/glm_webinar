@@ -4,39 +4,354 @@ output: html_document
 date: '2022-06-09'
 ---
 
+# Setup 
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-library(tidyverse)
-# install.packages('sjPlot')
-library(sjPlot)
-# install.packages('performance')
-library(performance)
+pacman::p_load(tidyverse, 
+               sjPlot, 
+               lme4, 
+               emmeans, 
+               multcomp, 
+               gmodels, 
+               epiDisplay)
 ```
 
-# Demos de la teoria
+# Demos
+
+## Dist. Normal
 
 ```{r}
-y=rnorm(n=100, # sample size
-        mean=100, # mean of sample
-        sd=0.5 # standard deviation of sample
+set.seed(1)
+
+x=rnorm(n=100,    # sample size
+        mean=10,  # mean of sample
+        sd=3      # standard deviation of sample
         )
+hist(x)
+head(x)
 
-x=rnorm(100)
-mod1=lm(y~x)
+mu = 3 + 2*x      # linear prediction
+plot(x,mu)
+
+## generate y from prediction with a normal error distribution
+y=rnorm(n=100,    # sample size
+        mean=mu,  # mean of sample
+        sd=3      # standard deviation of sample
+        )
+plot(x,y)
+```
+
+Modelo lineal
+
+```{r}
+mod1 <- lm(y~x)
 plot_model(mod1, type='pred', show.data=T, ci.lvl = NA)
+summary(mod1)
 ```
 
 ```{r}
-y1 <- rbinom(
-    n=100, # number of observations
+mod1.1 <- glm(y~x, family = "gaussian")
+plot_model(mod1.1, type='pred', show.data=T, ci.lvl = NA)
+summary(mod1.1)
+```
+
+## Dist. Binomial
+
+Como tiende a la normal cuando aumento n
+
+```{r}
+bin_1 <- rbinom(
+    n=10,     # number of observations
     size=100, # number of trials
-    p=0.5  # probability of success
+    p=0.5     # probability of success
     )
-x1 <- rnorm(100, 50, 1)
+hist(bin_1)
+head(bin_1)
+bin_2 <- rbinom(
+    n=10,     # number of observations
+    size=1,   # number of trials
+    p=0.5     # probability of success
+    )
+bin_2
+hist(bin_2)
+```
 
-glm(y1/100~x1, weights=100, family = binomial(link=logit))
+```{r}
+# generate data
+# set.seed(1)
+# x = rnorm(100, 5, 4)              ## sample x from a normal distribution
+# mu = -1 + 0.4*x                   ## linear predictor
+# prob = 1 / (1 + exp(-mu))         ## transform linear predictor with inverse of "logit" link
+# y = rbinom(100, 1, prob = prob)   ## sample y from probabilities with binomial error distribution
+# hist(y)
+# plot(x,y)
+```
 
+```{r}
+binomial_dat <- rio::import("https://raw.githubusercontent.com/juanchiem/agro_data/master/binomial.csv")
+binomial_dat %>% head
+# llamemos a este tipo de dataset: "binomial desplegado"
+with(binomial_dat, plot(x,y))
+```
+
+```{r}
+mod_lm_2 <- lm(y ~ x, data=binomial_dat)
+plot_model(mod_lm_2, type='pred', show.data=T, ci.lvl=NA)
+```
+
+```{r}
+glm1 <- glm(y~x, 
+           family = binomial(link = 'logit'), 
+           data=binomial_dat)
+```
+
+```{r}
+plot_model(glm1, type='pred', show.data=T, terms='x [all]')
+```
+
+```{r}
 binomial()
 poisson()
+```
+
+# Data 
+
+```{r}
+# maracuya <- "https://raw.githubusercontent.com/juanchiem/agro_data/master/maracuya_roug.txt"
+# raw <- rio::import(maracuya, header=TRUE) %>% tibble
+raw <- rio::import("david/maracuya_roug.txt", header = TRUE) %>% tibble
+
+
+dat <- raw %>%  
+  # dplyr::select(-inc) %>% 
+  # rio::export(file = "david/maracuya_roug.txt")  
+  mutate_at(vars(trt, bk), as.factor) %>% 
+  mutate(inc=dis_plants/n_plants)  # %>% 
+
+dat %>%
+  ggplot() +
+  aes(x=days, y=dis_plants, col=trt, shape=bk)+
+  geom_point()+
+  geom_line(aes(group=interaction(bk,trt))) +
+  scale_x_continuous(breaks=scales::pretty_breaks())
+```
+
+Filtramos el dataset completo para subsets de menos evaluaciones
+
+```{r}
+# solo una evaluación a los 60 dias 
+dat1 <- dat %>% 
+  filter(days %in% c(60))
+
+# solo una evaluación a los 90 dias 
+dat2 <- dat %>% 
+  filter(days %in% c(90))
+
+# Dos evaluaciones: a los 60 y 90 dias 
+dat3 <- dat %>% 
+  filter(days %in% c(60, 90)) %>% 
+  mutate_at(vars(days), as.factor) 
+```
+
+# Modelos
+
+Un solo momento de evaluacion 
+
+# · 60 d
+
+```{r}
+dat1
+
+dat1 %>% 
+  ggplot() + 
+  aes(x=trt, y=inc) + 
+  geom_point()
+```
+
+
+```{r}
+# mod1 <- glmer(
+#   cbind(dis_plants, n_plants-dis_plants) ~ trt + (1|bk), 
+#   family="binomial", 
+#   data=dat1) 
+
+mod1 <- glmer(
+  inc ~ trt + (1|bk),
+  weights=n_plants,
+  family="binomial", 
+  data=dat1) 
+
+car::Anova(mod1)
+summary(mod1)
+tab_model(mod1)
+
+plot_model(mod1, type='pred', show.data=T)
+em1 <- emmeans(mod1, ~ trt, type="response")
+res1 <- cld(em1, Letters = letters, alpha = .05, type = "response")
+knitr::kable(res1)
+```
+
+el cociente entre la deviance relativa (en adelante deviance) y los grados de libertad residuales debería estar cerca de 1 si el ajuste es razonable. Un valor grande de este cociente significa que la varianza es mayor que la esperada bajo la distribución correspondiente (sobredispersión). Se suele usar un valor
+de hasta 2.5 para el cociente como indicador de que no hay una sobredispersión importante.
+
+```{r}
+overdisp_fun(mod1)
+```
+
+# · 90 d
+
+```{r}
+dat2
+
+dat2 %>% 
+  ggplot() + 
+  aes(x=trt, y=inc) + 
+  geom_point()
+
+# mod1 <- glmer(
+#   cbind(dis_plants, n_plants-dis_plants) ~ trt + (1|bk), 
+#   family="binomial", 
+#   data=dat1)
+```
+
+
+```{r}
+mod2 <- glmer(
+  inc ~ trt + (1|bk),
+  weights=n_plants,
+  family="binomial", 
+  data=dat2) 
+
+car::Anova(mod2)
+summary(mod2)
+overdisp_fun(mod2)
+
+tab_model(mod2)
+plot_model(mod1, type='pred', show.data=T)
+
+em2 <- emmeans(mod2, ~ trt, type="response")
+res2 <- cld(em2, Letters = letters, alpha = .05, type = "response")
+knitr::kable(res2)
+
+```
+
+
+# · 60 y 90 d 
+
+```{r}
+dat3
+
+dat3 %>% 
+  ggplot() +
+  aes(x=days, y=inc, col=trt, shape=bk)+
+  geom_point()
+```
+
+
+```{r}
+mod3 <- glmer(inc ~ trt * days + (1|bk),
+              weights=n_plants,
+              family="binomial",
+              data=dat3) 
+
+car::Anova(mod3)
+
+mod3.1 <- glmer(inc ~ trt + days + (1|bk),
+              weights=n_plants,
+              family="binomial",
+              data=dat3) 
+anova(mod3, mod3.1, test = "Chisq")
+AIC(mod3, mod3.1)
+
+summary(mod3.1)
+overdisp_fun(mod3.1)
+tab_model(mod3.1)
+plot_model(mod3.1, 
+           terms = c("days", "trt"), 
+           type='pred', show.data=T)
+em3 <- emmeans(mod3, ~ trt|days, type="response")
+res3 <- cld(em3, Letters = letters, alpha = .05, type = "response")
+knitr::kable(res3)
+```
+
+
+#· Serie full
+
+```{r}
+head(dat)
+dat %>% 
+  ggplot() +
+  aes(x=days, y=inc, col=trt, shape=bk)+
+  geom_point()
+
+mod_serie <- glmer(inc ~ trt * days + (1|bk) + (1|bk:trt),
+              weights=n_plants,
+              family="binomial",
+              data=dat) 
+car::Anova(mod_serie)
+overdisp_fun(mod_serie)
+tab_model(mod_serie)
+plot_model(mod_serie, 
+           terms = c("days", "trt"), 
+           type='pred', show.data=T)
+
+```
+
+```{r}
+mod_serie0 <- glmer(inc ~ days + (1|bk) + (1|bk:trt),
+              weights=n_plants,
+              family="binomial",
+              data=dat) 
+
+mod_serie1 <- glmer(inc ~ days + (1|bk:trt),
+              weights=n_plants,
+              family="binomial",
+              data=dat) 
+```
+
+## Seleccion de modelo
+
+```{r}
+anova(mod_serie0, mod_serie, test = "Chisq")
+AIC(mod_serie0, mod_serie, mod_serie1)
+```
+
+```{r}
+parameters::model_parameters(mod_serie, effects = "all")
+summary(mod_serie)
+car::Anova(mod_serie)
+
+tab_model(mod_serie)
+plot_model(mod2, type = "pred", terms = c("days", "roug"))
+```
+
+
+Pred. lineal roug:no = -3.275 + 0.025 * days 
+Pred. lineal roug:yes = (-3.275 + 0.147) + (0.025 - 0.012) * days 
+
+
+## Prediccion
+
+```{r}
+df_predict = data.frame(trt=c("no", "yes"), bk=2, days=150)
+
+predict(mod_serie, 
+        newdata= df_predict, 
+        type="response")
+
+dat %>%
+  mutate(
+    pred_mod = predict(mod_serie),
+    fitted_mod = fitted(mod_serie)
+    ) 
+```
+
+```{r}
+dat %>% 
+  ggplot(aes(x = days, y = inf_plants/n_plants, col=roug))+
+  geom_point()+    
+  geom_smooth(method = "glm", se = F, fullrange=TRUE,
+              method.args = list(family = "binomial"))
 ```
 

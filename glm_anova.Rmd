@@ -12,53 +12,52 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r}
 pacman::p_load(
   # data import and explor 
-  agridat,
   tidyverse, 
   rio, 
   skimr,
-  # vctrs,
   # modeling
   lme4, 
   performance,
   ggResidpanel,
   car, 
   effects, 
-  emmeans) 
+  emmeans, 
+  multcomp) 
 ```
 
-Datos de rendimiento (rendimiento)
+## Variable continua
 
 ```{r}
-yield_dat <- agridat::beaven.barley  
-head(yield_dat)
-
-yield_dat %>% # head
+iris %>% # head
   ggplot()+ 
-  aes(x=gen, y=yield) + 
+  aes(x=Species , y=Sepal.Width) + 
   geom_boxplot(alpha=.5, width = .2) + 
-  geom_point(alpha=.7) + 
-  labs(x="Genotipos de cebada", y="Rendimiento (g)")
+  geom_point(alpha=.7) 
 ```
 
 ```{r}
-mod_lm <- lm(yield ~ gen + col, data=yield_dat)
-bartlett.test(yield_dat$yield, yield_dat$gen)
-em <- emmeans(mod_lm, "gen")
+mod_lm <- lm(Sepal.Width ~ Species, data=iris)
+check_normality(mod_lm)
+check_homogeneity(mod_lm, method = "bartlett")
+em <- emmeans(mod_lm, "Species")
 knitr::kable(em) 
 ```
 
-Importamos los datos de incidencia
+Datos de incidencia
 
 ```{r}
-phom_raw <- import("https://raw.githubusercontent.com/juanchiem/agro_data/master/phomopsisp.csv")
+phom_raw <- import("https://raw.githubusercontent.com/juanchiem/agro_data/master/phomopsisp.csv") %>% tibble
+
+phom_raw <- rio::import("madden/phomopsisp.csv", sep = ",") %>% tibble
+
 ```
 
-> ***Efecto de tratamientos de fungicidas sobre tizon foliar por Phomopsis en frutilla (Nita, Madden & Ellis)*** \
-> -- Patogeno: *Phomopsis obscurans* \
-> - Diseño en bloques completos aleatorizados (RCBD) \
-> -- Cuatro bloques (bk, j = 1, ..., 4) \
-> -- Ocho tratamientos (trt, i = 1, ..., 8) aleatorizados dentro de cada bloque \
-> - Variable respuesta (Y): incidencia de foliolos \
+> ***Efecto de tratamientos de fungicidas sobre tizon foliar por Phomopsis en frutilla (Nita, Madden & Ellis)***\
+> -- Patogeno: *Phomopsis obscurans*\
+> - Diseño en bloques completos aleatorizados (RCBD)\
+> -- Cuatro bloques (bk, j = 1, ..., 4)\
+> -- Ocho tratamientos (trt, i = 1, ..., 8) aleatorizados dentro de cada bloque\
+> - Variable respuesta (Y): incidencia de foliolos\
 > -- Numero de foliolos enfermos de un total n
 >
 > Madden, L. V., W. W. Turechek, and M. Nita. "Evaluation of generalized linear mixed models for analyzing disease incidence data obtained in designed experiments." *Plant Disease* 86.3 (2002): 316-325.
@@ -66,6 +65,8 @@ phom_raw <- import("https://raw.githubusercontent.com/juanchiem/agro_data/master
 # Visualización
 
 ```{r}
+phom_raw %>% head
+
 phom_dat <- phom_raw %>% 
   mutate_at(vars(trt, bk), as.factor) %>% 
   mutate(inc=y/n)
@@ -83,7 +84,6 @@ phom_dat %>%
   aes(x=trt, y = inc) + 
   geom_boxplot(alpha=.5, width = .2) + 
   geom_point(alpha=.7) + 
-  geom_text(aes(label=bk), hjust=-1)+
   labs(x="Tratamientos", y="Incidencia (proporción)")
 ```
 
@@ -92,9 +92,28 @@ phom_dat %>%
 • Los SE incorrectos darán pruebas incorrectas de significación para los efectos del tratamiento y conducirán a conclusiones incorrectas
 
 ```{r}
-mod_1 <- glmer(cbind(y, n-y) ~ trt + (1|bk), 
+# mod_1 <- glmer(cbind(y, n-y) ~ trt + (1|bk), 
+#                family="binomial", 
+#                # weights = n,
+#                data=phom_dat)
+# summary(mod_1)
+
+mod_lm2 <- lmer(inc ~ trt + (1|bk), data=phom_dat)
+check_normality(mod_lm2)
+check_homogeneity(mod_lm2)
+8
+```
+
+```{r}
+mod_1 <- glmer(inc ~ trt + (1|bk), 
                family="binomial", 
-               # weights = n,
+               weights = n,
                data=phom_dat)
-hnp::hnp(mod_1)
+summary(mod_1)
+```
+
+```{r}
+em1 <- emmeans(mod_1, ~ trt, type="response")
+res1 <- cld(em1, Letters = letters, alpha = .05, type = "response")
+knitr::kable(res1)
 ```
