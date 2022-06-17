@@ -8,12 +8,12 @@ Cargamos paquetes de utilidad para esta sesión y configuramos la estetica globa
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE)
-pacman::p_load(tidyverse,  # manipulacion general de datos
+pacman::p_load(rio, tidyverse,  # manipulacion general de datos
                lme4,       # ajuste de modelos mixtos
                DHARMa,     # diagnosticos de GLM
                performance,# diagnosticos de LM 
                sjPlot,     # visualizacion de outputs
-               emmeans,    # estimacion de medias predichas por los modelos y comparaciones
+               emmeans,    # medias predichas por los modelos y comparaciones
                ggeffects,  # predicciones
                multcomp)   # letras de test de comparaciones multiples
 
@@ -167,8 +167,8 @@ Variable aleatoria $X$ que es distribuida $X∼binomial(n,p)$ con media $μ = np
 # DBCA
 
 ```{r}
-# phom_raw <- import("https://raw.githubusercontent.com/juanchiem/agro_data/master/phomopsisp.csv") %>% tibble
-phom_raw <- rio::import("data/phomopsis.csv") %>% tibble 
+phom_raw <- import("https://raw.githubusercontent.com/juanchiem/glm_webinar/main/data/phomopsis.csv") %>% tibble
+# phom_raw <- rio::import("data/phomopsis.csv") %>% tibble 
 ```
 
 **Efecto de tratamientos de fungicidas sobre tizon foliar por Phomopsis en frutilla (Nita, Madden & Ellis)**
@@ -409,7 +409,8 @@ plot: unidad experimental (parcelas=bloque:geno)
 
 
 ```{r}
-raw <- rio::import("data/maracuya.csv") %>% tibble
+raw <- rio::import("https://raw.githubusercontent.com/juanchiem/glm_webinar/main/data/maracuya.csv") %>% tibble
+# raw <- rio::import("data/maracuya.csv") %>% tibble
 
 dat <- raw %>%  
   mutate_at(vars(geno, bk), as.factor) %>% 
