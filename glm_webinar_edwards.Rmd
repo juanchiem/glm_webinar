@@ -8,6 +8,7 @@ Cargamos paquetes de utilidad para esta sesión y configuramos la estetica globa
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE)
+if (!require("pacman")) install.packages("pacman")
 pacman::p_load(rio, tidyverse,  # manipulacion general de datos
                lme4,       # ajuste de modelos mixtos
                DHARMa,     # diagnosticos de GLM
@@ -15,7 +16,7 @@ pacman::p_load(rio, tidyverse,  # manipulacion general de datos
                sjPlot,     # visualizacion de outputs
                emmeans,    # medias predichas por los modelos y comparaciones
                ggeffects,  # predicciones
-               multcomp)   # letras de test de comparaciones multiples
+               multcomp, multcompView)   # letras de test de comparaciones multiples
 
 theme_set(theme_bw())
 
